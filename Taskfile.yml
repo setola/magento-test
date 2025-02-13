@@ -1,0 +1,64 @@
+version: "3"
+dotenv:
+  - .env
+tasks:
+  php-cli:
+    cmds:
+      - docker compose run --rm php-cli {{ .CLI_ARGS }}
+  create-project:
+    cmds:
+      - task: php-cli
+        vars:
+          CLI_ARGS: | 
+            composer create-project \
+            --repository-url=https://repo.magento.com/ \
+            magento/project-community-edition \
+            ${PHP_WORKDIR}
+      - task: fix-permissions
+  fix-permissions:
+    cmds:
+      - find src/var src/generated src/vendor src/pub/static src/pub/media src/app/etc -type f -exec chmod g+w {} +
+      - find src/var src/generated src/vendor src/pub/static src/pub/media src/app/etc -type d -exec chmod g+ws {} +
+      - chmod u+x ${MAGENTO_BIN}
+  magento:
+    cmds:
+      - task: php-cli
+        vars:
+          CLI_ARGS: ${MAGENTO_BIN} {{ .CLI_ARGS }}
+  magento:install:
+    cmds:
+      - task: php-cli
+        vars:
+          CLI_ARGS: |
+            -d memory_limit=2G ${MAGENTO_BIN} setup:install \
+            --base-url=http://${BASE_URL} \
+            --db-host=db \
+            --db-name=${MYSQL_DATABASE} \
+            --db-user=${MYSQL_USER} \
+            --db-password=${MYSQL_PASSWORD} \
+            --backend-frontname=admin \
+            --admin-firstname=admin \
+            --admin-lastname=admin \
+            --admin-email=admin@admin.com \
+            --admin-user=admin \
+            --admin-password=admin123 \
+            --language=it_IT \
+            --currency=EUR \
+            --timezone=Europe/Rome \
+            --use-rewrites=1 \
+            --search-engine=opensearch \
+            --opensearch-host=opensearch \
+            --opensearch-port=9200 \
+            --opensearch-index-prefix=magento2 \
+            --opensearch-timeout=15 \
+            --opensearch-enable-auth=0
+  bash:
+    cmds:
+      - task: php-cli
+        vars:
+          CLI_ARGS: bash -l
+  test-opensearch:
+    cmds:
+      - task: php-cli
+        vars:
+          CLI_ARGS: curl http://opensearch:9200
