@@ -81,3 +81,5 @@ src/pub/media/cms/*
 src/pub/media/mageplaza/*
 src/pub/media/rblab_csm_slide/*
 
+src/pub/test.php
+src/pub/test.html

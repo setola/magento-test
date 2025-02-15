@@ -5,6 +5,7 @@ volumes:
 
 services:
   db:
+    hostname: db
     user: ${DOCKER_USER}:${DOCKER_GROUP}
     env_file:
       - .env
@@ -18,29 +19,29 @@ services:
     volumes:
       - db:/var/lib/mysql:Z
       - ./data/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
-  
-  adminer:
-    user: ${DOCKER_USER}:${DOCKER_GROUP}
-    image: adminer
-    ports:
-      - 8080:8080
 
   php-fpm:
     user: ${DOCKER_USER}:${DOCKER_GROUP}
+    hostname: php-fpm
     build:
       context: ./docker/php
       dockerfile: php-fpm.Dockerfile
       args:
         PHP_VERSION: ${PHP_VERSION}
+    environment:
+      PHP_DOCUMENT_ROOT: ${DOCROOT}
     volumes:
       - ./src:/var/www/html
+      #- ./docker/php/rootfs/usr/local/etc/php/conf.d/zzz.ini:/usr/local/etc/php/conf.d/zzz.ini
+      #- ./docker/php/rootfs/usr/local/etc/php-fpm.d/zzz-rblab.conf:/usr/local/etc/php-fpm.d/zzz-rblab.conf
 
   opensearch:
+    hostname: opensearch
     user: ${DOCKER_USER}:${DOCKER_GROUP}
     image: opensearchproject/opensearch
-    ports:
-      - "9200:9200"
-      - "9600:9600"
+    #ports:
+    #  - "9200:9200"
+    #  - "9600:9600"
     environment:
       discovery.type: single-node
       bootstrap.memory_lock: true
@@ -48,19 +49,26 @@ services:
       ES_JAVA_OPTS: -Xms1g -Xmx1g
       OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
       OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
-    #volumes:
-      #- opensearch:/usr/share/opensearch/data
+    volumes:
+      - opensearch:/usr/share/opensearch/data
 
   web:
-    image: httpd:latest
+    hostname: web
+    #image: httpd:latest
+    image: rblab/httpd:2.4-v6
     build:
       context: ./docker/httpd
       dockerfile: httpd.Dockerfile
+    environment:
+      FPM_HOST: php-fpm
+      DOCROOT: ${DOCROOT}
+      PS1: ${PS1}
     ports:
       - 80:80
       - 443:443
     volumes:
       - ./src:/usr/local/apache2/htdocs:ro
-      #- ./default.conf:/etc/nginx/conf.d/default.conf
-      #- ./docker/httpd/certs:/usr/local/apache2/certs
-      #- ./docker/httpd/extra/docker-default.conf:/usr/local/apache2/extra/docker-default.conf
+      - ./src:/var/www/html:ro
+      #- ./docker/httpd/rootfs/usr/local/apache2/cert:/usr/local/apache2/cert
+      - ./docker/httpd/rootfs/usr/local/apache2/conf/extra/docker-default.conf:/usr/local/apache2/conf/extra/docker-default.conf
+      - ./docker/httpd/rootfs/usr/local/apache2/conf/extra/remote-ip.conf:/usr/local/apache2/conf/extra/remote-ip.conf

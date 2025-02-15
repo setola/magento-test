@@ -177,4 +177,24 @@ tasks:
       - openssl x509 -in "{{ .CERTS_DIR }}/rootCA.crt" -noout -text
       - openssl req  -in "{{ .CERTS_DIR }}/server.csr" -noout -text
       - openssl x509 -in "{{ .CERTS_DIR }}/server.crt" -noout -text
-      
+    
+  dc:restart:
+    cmds:
+      - docker compose build
+      - docker compose down
+      - docker compose up -d
+
+  adminer:start:
+    cmds:
+      - |
+        docker run \
+          --name ${COMPOSE_PROJECT_NAME}-adminer
+          --detach \
+          --rm \
+          --network ${COMPOSE_PROJECT_NAME}_default \
+          --user ${DOCKER_USER}:${DOCKER_GROUP} \
+          --publish 8080:8080 \
+          adminer
+  adminer:stop:
+    cmds:
+      - docker rm -f ${COMPOSE_PROJECT_NAME}-adminer

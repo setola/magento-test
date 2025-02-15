@@ -1,19 +1,16 @@
 ARG FROM=httpd:alpine
 FROM ${FROM}
 
-ARG FPM_URI=fcgi://php-fpm:9000
-ENV FPM_URI=${FPM_URI}
-ARG CERT_KEY=/usr/local/apache2/conf/server.key
-ENV CERT_KEY=${CERT_KEY}
-ARG CERT_FILE=/usr/local/apache2/conf/server.crt
-ENV CERT_FILE=${CERT_FILE}
 ARG PROXY_TIMEOUT=60
 ENV PROXY_TIMEOUT=${PROXY_TIMEOUT}
-
-ARG DEP_PACKAGES="shadow openssl"
-RUN set -eux; \
-  apk add -U --no-cache --virtual .persistent-deps-common ${DEP_PACKAGES}; \
-  rm -rf /var/cache/apk/*
+ARG DOCROOT=${WWW_DATA_HOME}
+ENV DOCROOT=${DOCROOT}
+ARG FPM_URI=fcgi://php-fpm:9000
+ENV FPM_URI=${FPM_URI}
+ARG CERT_KEY=/usr/local/apache2/cert/server.key
+ENV CERT_KEY=${CERT_KEY}
+ARG CERT_FILE=/usr/local/apache2/cert/server.crt
+ENV CERT_FILE=${CERT_FILE}
 
 COPY rootfs /
 
@@ -32,7 +29,8 @@ RUN set -eux; \
     -e 's/User daemon/User www-data/' \
     -e 's/Group daemon/Group www-data/' \
     -e 's/DirectoryIndex index.html/DirectoryIndex index.php index.html/' \
-    -e '/<Directory "${HTTPD_PREFIX}\/htdocs">/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' \
+    -e "s#${HTTPD_PREFIX}/htdocs#\${DOCROOT}#g" \
+    -e '/<Directory "${DOCROOT}">/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' \
     -e 's/#ServerName.*/ServerName localhost:80/' \
     -e "\$aInclude conf/extra/docker-default.conf" \
     -e "\$aInclude conf/extra/remote-ip.conf" \
@@ -43,6 +41,10 @@ RUN set -eux; \
     -e 's/ServerName/#ServerName/' \
     -e 's/ServerAdmin/#ServerAdmin/' \
     "${HTTPD_PREFIX}/conf/extra/httpd-ssl.conf"
+
+RUN set -eux \
+  mkdir -p $( dirname ${CERT_FILE} ); \
+  mkdir -p $( dirname ${CERT_KEY} ); 
 
 WORKDIR "${HTTPD_PREFIX}/htdocs"
 
