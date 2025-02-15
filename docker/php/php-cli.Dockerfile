@@ -35,3 +35,4 @@ RUN install-php-extensions \
 COPY rootfs /
 
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+RUN sed 's/memory_limit = 128M/memory_limit = 2G/' -i "$PHP_INI_DIR/php.ini"

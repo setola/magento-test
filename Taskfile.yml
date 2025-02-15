@@ -19,8 +19,8 @@ tasks:
           --force-rm \
           --build-arg "PHP_VERSION=${PHP_VERSION}" \
           --tag {{ .PHP_CLI_IMAGE }} \
-          --file {{ .TASKFILE_DIR }}/docker/php-cli.Dockerfile \
-          {{ .TASKFILE_DIR }}/docker
+          --file {{ .TASKFILE_DIR }}/docker/php/php-cli.Dockerfile \
+          {{ .TASKFILE_DIR }}/docker/php
 
   php-cli:
     desc: Runs the project CLI in docker
@@ -45,8 +45,7 @@ tasks:
           --network ${COMPOSE_PROJECT_NAME}_default \
           --user ${DOCKER_USER}:${DOCKER_GROUP} \
           --env PHP_VERSION=${PHP_VERSION} \
-          --env COMPOSER_AUTH="{{ .COMPOSER_AUTH }}" \
-          --env PHP_MEMORY_LIMIT=4G \
+          --env COMPOSER_AUTH='{{ .COMPOSER_AUTH }}' \
           --workdir ${PHP_WORKDIR} \
           --volume ./src:${PHP_WORKDIR} \
           {{ .PHP_CLI_IMAGE }} \
@@ -195,6 +194,7 @@ tasks:
           --user ${DOCKER_USER}:${DOCKER_GROUP} \
           --publish 8080:8080 \
           adminer
+  
   adminer:stop:
     cmds:
       - docker rm -f ${COMPOSE_PROJECT_NAME}-adminer
