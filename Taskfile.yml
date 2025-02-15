@@ -1,11 +1,59 @@
 version: "3"
+
 dotenv:
   - .env
+
+vars:
+  PHP_CLI_IMAGE: ${COMPOSE_PROJECT_NAME}-php-cli
+
 tasks:
-  php-cli:
+  php-cli:build:
+    dotenv:
+      - .env
+    desc: Builds the command line interface image for the project
+    silent: true
     cmds:
-      - docker compose run --rm php-cli {{ .CLI_ARGS }}
+      - |
+        docker build \
+          --pull \
+          --force-rm \
+          --build-arg "PHP_VERSION=${PHP_VERSION}" \
+          --tag {{ .PHP_CLI_IMAGE }} \
+          --file {{ .TASKFILE_DIR }}/docker/php-cli.Dockerfile \
+          {{ .TASKFILE_DIR }}/docker
+
+  php-cli:
+    desc: Runs the project CLI in docker
+    silent: true
+    preconditions:
+      - docker image ls | grep magento-php-cli
+    vars:
+      COMPOSER_AUTH: |
+        {
+          "http-basic": {
+            "repo.magento.com": {
+              "username": "${MAGENTO_KEY_PUB}",
+              "password": "${MAGENTO_KEY_PRV}"
+            }
+          }
+        }
+    cmds:
+      - |
+        docker run \
+          --tty \
+          --interactive \
+          --network ${COMPOSE_PROJECT_NAME}_default \
+          --user ${DOCKER_USER}:${DOCKER_GROUP} \
+          --env PHP_VERSION=${PHP_VERSION} \
+          --env COMPOSER_AUTH="{{ .COMPOSER_AUTH }}" \
+          --env PHP_MEMORY_LIMIT=4G \
+          --workdir ${PHP_WORKDIR} \
+          --volume ./src:${PHP_WORKDIR} \
+          {{ .PHP_CLI_IMAGE }} \
+          {{ .CLI_ARGS }}
+  
   create-project:
+    desc: Creates the magento project using composer
     cmds:
       - task: php-cli
         vars:
@@ -15,17 +63,23 @@ tasks:
             magento/project-community-edition \
             ${PHP_WORKDIR}
       - task: fix-permissions
+
   fix-permissions:
+    desc: Fixes some files permission missed by composer project creation
     cmds:
       - find src/var src/generated src/vendor src/pub/static src/pub/media src/app/etc -type f -exec chmod g+w {} +
       - find src/var src/generated src/vendor src/pub/static src/pub/media src/app/etc -type d -exec chmod g+ws {} +
       - chmod u+x ${MAGENTO_BIN}
+  
   magento:
+    desc: Runs magento CLI inside docker
     cmds:
       - task: php-cli
         vars:
           CLI_ARGS: ${MAGENTO_BIN} {{ .CLI_ARGS }}
+  
   magento:install:
+    desc: Runs magento installation routine
     cmds:
       - task: php-cli
         vars:
@@ -52,13 +106,75 @@ tasks:
             --opensearch-index-prefix=magento2 \
             --opensearch-timeout=15 \
             --opensearch-enable-auth=0
+  
   bash:
+    desc: Opens a CLI inside docker project
     cmds:
       - task: php-cli
         vars:
           CLI_ARGS: bash -l
+  
   test-opensearch:
+    desc: Test connection with opensearch
     cmds:
       - task: php-cli
         vars:
           CLI_ARGS: curl http://opensearch:9200
+  
+  log:clear:
+    desc: Removes magento logs
+    cmds:
+      - rm {{ .TASKFILE_DIR }}/src/var/log/*.log
+  
+  certs:generate:
+    desc: TODO - Generates project SSL certificates
+    vars:
+      CERTS_DIR: "{{ .TASKFILE_DIR }}/docker/httpd/certs/"
+      SUBJECT_ALT_NAMES:
+        - "IP:0.0.0.0"
+        - "IP:127.0.0.1"
+        - "DNS:localhost"
+        - "DNS:*.localhost"
+    cmds:
+      - |
+        openssl req -x509 -nodes \
+          -days 36500 \
+          -newkey rsa:4096 \
+          -keyout "{{ .CERTS_DIR }}/rootCA.key" \
+          -out "{{ .CERTS_DIR }}/rootCA.crt" \
+          -subj "/C=IT/ST=Venice/L=Mirano/O=SetoLAN/OU=IT Department/CN=SetoLAN DEV Root CA" \
+          -addext "keyUsage = critical, keyCertSign" \
+          -addext "basicConstraints = critical, CA:TRUE, pathlen:0" \
+          -addext "subjectKeyIdentifier = hash"
+      - |
+        openssl req -sha256 -nodes \
+          -newkey rsa:2048 \
+          -key "{{ .CERTS_DIR }}/rootCA.key" \
+          -keyout "{{ .CERTS_DIR }}/server.key" \
+          -out "{{ .CERTS_DIR }}/server.csr" \
+          -subj "/CN=localhost/O=DMIND/OU=IT Department" \
+          -reqexts SAN \
+          -config <(cat <<END
+            [SAN]
+              subjectAltName={{ .SUBJECT_ALT_NAMES | join "," }}
+        END
+          )
+      - |
+        openssl x509 -req -sha256 \
+          -days 36500 \
+          -in "{{ .CERTS_DIR }}/server.csr" \
+          -out "{{ .CERTS_DIR }}/server.crt" \
+          -CAkey "{{ .CERTS_DIR }}/rootCA.key" -CA "{{ .CERTS_DIR }}/rootCA.crt" -CAcreateserial \
+          -extfile <(cat <<END
+            subjectAltName = {{ .SUBJECT_ALT_NAMES | join "," }}
+            keyUsage = critical, digitalSignature, keyEncipherment
+            extendedKeyUsage = serverAuth
+            basicConstraints = CA:FALSE
+            authorityKeyIdentifier = keyid:always
+            subjectKeyIdentifier = none
+        END
+          )
+      - openssl x509 -in "{{ .CERTS_DIR }}/rootCA.crt" -noout -text
+      - openssl req  -in "{{ .CERTS_DIR }}/server.csr" -noout -text
+      - openssl x509 -in "{{ .CERTS_DIR }}/server.crt" -noout -text
+      

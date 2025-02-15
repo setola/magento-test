@@ -1,6 +1,7 @@
-ARG PHP_VERSION
+ARG PHP_VERSION=8.3
 
-FROM php:${PHP_VERSION}-fpm
+FROM php:${PHP_VERSION}-cli
+COPY --from=composer /usr/bin/composer /usr/bin/composer
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/bin/
 
 RUN install-php-extensions \
@@ -30,3 +31,5 @@ RUN install-php-extensions \
     zip \
     zlib \
     libxml 
+
+COPY rootfs /
