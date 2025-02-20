@@ -32,8 +32,8 @@ services:
       PHP_DOCUMENT_ROOT: ${DOCROOT}
     volumes:
       - ./src:/var/www/html
-      #- ./docker/php/rootfs/usr/local/etc/php/conf.d/zzz.ini:/usr/local/etc/php/conf.d/zzz.ini
-      #- ./docker/php/rootfs/usr/local/etc/php-fpm.d/zzz-rblab.conf:/usr/local/etc/php-fpm.d/zzz-rblab.conf
+      - ./docker/php/rootfs/usr/local/etc/php/conf.d/zzz.ini:/usr/local/etc/php/conf.d/zzz.ini
+      - ./docker/php/rootfs/usr/local/etc/php-fpm.d/zzz-docker.conf:/usr/local/etc/php-fpm.d/zzz-docker.conf
 
   opensearch:
     hostname: opensearch
@@ -69,6 +69,6 @@ services:
     volumes:
       - ./src:/usr/local/apache2/htdocs:ro
       - ./src:/var/www/html:ro
-      #- ./docker/httpd/rootfs/usr/local/apache2/cert:/usr/local/apache2/cert
-      - ./docker/httpd/rootfs/usr/local/apache2/conf/extra/docker-default.conf:/usr/local/apache2/conf/extra/docker-default.conf
-      - ./docker/httpd/rootfs/usr/local/apache2/conf/extra/remote-ip.conf:/usr/local/apache2/conf/extra/remote-ip.conf
+      - ./docker/httpd/cert:/usr/local/apache2/cert
+      #- ./docker/httpd/rootfs/usr/local/apache2/conf/extra/docker-default.conf:/usr/local/apache2/conf/extra/docker-default.conf
+      #- ./docker/httpd/rootfs/usr/local/apache2/conf/extra/remote-ip.conf:/usr/local/apache2/conf/extra/remote-ip.conf

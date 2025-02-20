@@ -27,16 +27,6 @@ tasks:
     silent: true
     preconditions:
       - docker image ls | grep magento-php-cli
-    vars:
-      COMPOSER_AUTH: |
-        {
-          "http-basic": {
-            "repo.magento.com": {
-              "username": "${MAGENTO_KEY_PUB}",
-              "password": "${MAGENTO_KEY_PRV}"
-            }
-          }
-        }
     cmds:
       - |
         docker run \
@@ -45,18 +35,19 @@ tasks:
           --network ${COMPOSE_PROJECT_NAME}_default \
           --user ${DOCKER_USER}:${DOCKER_GROUP} \
           --env PHP_VERSION=${PHP_VERSION} \
-          --env COMPOSER_AUTH='{{ .COMPOSER_AUTH }}' \
+          --env TZ=$(cat /etc/timezone) \
           --workdir ${PHP_WORKDIR} \
           --volume ./src:${PHP_WORKDIR} \
+          --volume /etc/passwd:/etc/passwd:ro \
           {{ .PHP_CLI_IMAGE }} \
           {{ .CLI_ARGS }}
-  
+
   create-project:
     desc: Creates the magento project using composer
     cmds:
       - task: php-cli
         vars:
-          CLI_ARGS: | 
+          CLI_ARGS: |
             composer create-project \
             --repository-url=https://repo.magento.com/ \
             magento/project-community-edition \
@@ -69,14 +60,14 @@ tasks:
       - find src/var src/generated src/vendor src/pub/static src/pub/media src/app/etc -type f -exec chmod g+w {} +
       - find src/var src/generated src/vendor src/pub/static src/pub/media src/app/etc -type d -exec chmod g+ws {} +
       - chmod u+x ${MAGENTO_BIN}
-  
+
   magento:
     desc: Runs magento CLI inside docker
     cmds:
       - task: php-cli
         vars:
           CLI_ARGS: ${MAGENTO_BIN} {{ .CLI_ARGS }}
-  
+
   magento:install:
     desc: Runs magento installation routine
     cmds:
@@ -105,30 +96,42 @@ tasks:
             --opensearch-index-prefix=magento2 \
             --opensearch-timeout=15 \
             --opensearch-enable-auth=0
-  
+
+  magento:disable-modules:
+    desc: Disable useless modules for magento
+    cmds:
+      - task: php-cli
+        vars:
+          CLI_ARGS: |
+            -d memory_limit=2G ${MAGENTO_BIN} module:disable Magento_AdminAdobeImsTwoFactorAuth Magento_TwoFactorAuth
+      - task: php-cli
+        vars:
+          CLI_ARGS: |
+            -d memory_limit=2G ${MAGENTO_BIN} cache:flush
+
   bash:
     desc: Opens a CLI inside docker project
     cmds:
       - task: php-cli
         vars:
           CLI_ARGS: bash -l
-  
+
   test-opensearch:
     desc: Test connection with opensearch
     cmds:
       - task: php-cli
         vars:
           CLI_ARGS: curl http://opensearch:9200
-  
+
   log:clear:
     desc: Removes magento logs
     cmds:
       - rm {{ .TASKFILE_DIR }}/src/var/log/*.log
-  
+
   certs:generate:
     desc: TODO - Generates project SSL certificates
     vars:
-      CERTS_DIR: "{{ .TASKFILE_DIR }}/docker/httpd/certs/"
+      CERTS_DIR: "{{ .TASKFILE_DIR }}/docker/httpd/cert"
       SUBJECT_ALT_NAMES:
         - "IP:0.0.0.0"
         - "IP:127.0.0.1"
@@ -176,25 +179,51 @@ tasks:
       - openssl x509 -in "{{ .CERTS_DIR }}/rootCA.crt" -noout -text
       - openssl req  -in "{{ .CERTS_DIR }}/server.csr" -noout -text
       - openssl x509 -in "{{ .CERTS_DIR }}/server.crt" -noout -text
-    
-  dc:restart:
-    cmds:
-      - docker compose build
-      - docker compose down
-      - docker compose up -d
 
   adminer:start:
     cmds:
       - |
         docker run \
-          --name ${COMPOSE_PROJECT_NAME}-adminer
+          --name ${COMPOSE_PROJECT_NAME}-adminer \
           --detach \
           --rm \
           --network ${COMPOSE_PROJECT_NAME}_default \
           --user ${DOCKER_USER}:${DOCKER_GROUP} \
           --publish 8080:8080 \
           adminer
-  
+
   adminer:stop:
     cmds:
       - docker rm -f ${COMPOSE_PROJECT_NAME}-adminer
+
+  goaccess:
+    desc: Downloads and analizes production access logs, then uploads a report in html format using goaccess
+    prompt: This will take a while, do you whant to continue?
+    vars:
+      LOCAL_DIR: "/tmp/access_log_report"
+      LOCAL_ACCESS_LOG: "{{ .LOCAL_DIR }}/access_log"
+      LOCAL_REPORT: "{{ .LOCAL_DIR }}/report.html"
+      REMOTE_ACCESS_LOG: logs/access_log
+      REMOTE_REPORT: public_html/pub/test-tex/report.html
+      GEO_IP_DB: /usr/share/GeoIP/
+    cmds:
+      - mkdir -p {{ .LOCAL_DIR }}
+      - defer: rm -fr {{ .LOCAL_DIR }}
+      - scp -C planetshooters:{{ .REMOTE_ACCESS_LOG }} {{ .LOCAL_ACCESS_LOG }}
+      - touch {{ .LOCAL_REPORT }}
+      - |
+        docker run \
+          --rm \
+          --interactive \
+          --user ${DOCKER_USER}:${DOCKER_GROUP} \
+          --env LANG=$LANG \
+          --env TZ=$(cat /etc/timezone) \
+          --volume {{ .LOCAL_DIR }}:/data \
+          --volume {{ .GEO_IP_DB }}:/geo_ip_db \
+          allinurl/goaccess \
+            --log-file /data/access_log \
+            --output /data/report.html \
+            --log-format COMBINED \
+            --html-report-title=Planeshooters \
+            --geoip-database=/geo_ip_db/GeoLite2-City.mmdb
+      - scp {{ .LOCAL_REPORT }} planetshooters:{{ .REMOTE_REPORT }}
