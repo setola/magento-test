@@ -54,8 +54,6 @@ services:
 
   web:
     hostname: web
-    #image: httpd:latest
-    image: rblab/httpd:2.4-v6
     build:
       context: ./docker/httpd
       dockerfile: httpd.Dockerfile

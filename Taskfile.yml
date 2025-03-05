@@ -13,6 +13,13 @@ tasks:
     desc: Builds the command line interface image for the project
     silent: true
     cmds:
+      - docker volume create composer
+      - |
+        docker run \
+          --rm \
+          --volume composer:/composer \
+          php:${PHP_VERSION}-cli \
+          chown -R ${DOCKER_USER}:${DOCKER_GROUP} /composer
       - |
         docker build \
           --pull \
@@ -36,23 +43,40 @@ tasks:
           --user ${DOCKER_USER}:${DOCKER_GROUP} \
           --env PHP_VERSION=${PHP_VERSION} \
           --env TZ=$(cat /etc/timezone) \
+          --env COMPOSER_HOME=/composer \
           --workdir ${PHP_WORKDIR} \
           --volume ./src:${PHP_WORKDIR} \
           --volume /etc/passwd:/etc/passwd:ro \
+          --volume /etc/group:/etc/group:ro \
+          --volume composer:/composer \
           {{ .PHP_CLI_IMAGE }} \
           {{ .CLI_ARGS }}
 
-  create-project:
-    desc: Creates the magento project using composer
+  composer:
+    desc: Runs composer inside docker
     cmds:
       - task: php-cli
         vars:
+          CLI_ARGS: composer {{ .CLI_ARGS }}
+
+  composer:create-project:
+    desc: Creates the magento project using composer
+    cmds:
+      - task: composer
+        vars:
           CLI_ARGS: |
-            composer create-project \
+            create-project \
             --repository-url=https://repo.magento.com/ \
             magento/project-community-edition \
             ${PHP_WORKDIR}
       - task: fix-permissions
+
+  composer:install:
+    desc: Installs composer dependencies
+    cmds:
+      - task: composer
+        vars:
+          CLI_ARGS: install
 
   fix-permissions:
     desc: Fixes some files permission missed by composer project creation
@@ -71,10 +95,10 @@ tasks:
   magento:install:
     desc: Runs magento installation routine
     cmds:
-      - task: php-cli
+      - task: magento
         vars:
           CLI_ARGS: |
-            -d memory_limit=2G ${MAGENTO_BIN} setup:install \
+            setup:install \
             --base-url=http://${BASE_URL} \
             --db-host=db \
             --db-name=${MYSQL_DATABASE} \
@@ -100,14 +124,32 @@ tasks:
   magento:disable-modules:
     desc: Disable useless modules for magento
     cmds:
-      - task: php-cli
+      - task: magento
         vars:
-          CLI_ARGS: |
-            -d memory_limit=2G ${MAGENTO_BIN} module:disable Magento_AdminAdobeImsTwoFactorAuth Magento_TwoFactorAuth
-      - task: php-cli
+          CLI_ARGS: module:disable Magento_AdminAdobeImsTwoFactorAuth Magento_TwoFactorAuth
+      - task: magento
         vars:
-          CLI_ARGS: |
-            -d memory_limit=2G ${MAGENTO_BIN} cache:flush
+          CLI_ARGS: cache:flush
+  
+  magento:set:base-url:
+    desc: Set the base url for the magento project
+    cmds:
+      - task: magento
+        vars:
+          CLI_ARGS: config:set web/unsecure/base_url http://${BASE_URL}/
+      - task: magento
+        vars:
+          CLI_ARGS: config:set web/secure/base_url https://${BASE_URL}/
+  
+  project:first-run:
+    desc: Runs the first run routine for the project
+    cmds:
+      - task: certs:generate
+      - task: php-cli:build
+      - task: composer:install
+      - task: magento:install
+      - task: magento:disable-modules
+      - task: magento:set:base-url
 
   bash:
     desc: Opens a CLI inside docker project

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7745cd432e5cca83691ff6055ccf0fdc",
+    "content-hash": "cd8f1ce29c1e3a1e5176b983d8b9595b",
     "packages": [
         {
             "name": "2tvenom/cborencode",
@@ -1413,6 +1413,34 @@
                 "source": "https://github.com/DASPRiD/Enum/tree/1.0.6"
             },
             "time": "2024-08-09T14:30:48+00:00"
+        },
+        {
+            "name": "easynolo/ecommercesella",
+            "version": "1.4.2",
+            "dist": {
+                "type": "zip",
+                "url": "https://repo.magento.com/archives/easynolo/ecommercesella/easynolo-ecommercesella-1.4.2.0.zip",
+                "shasum": "93b7ee9113f6d235078dd8fe31d7e7f153b8445c"
+            },
+            "type": "magento2-module",
+            "autoload": {
+                "psr-4": {
+                    "Sella\\EcommerceSella\\": ""
+                },
+                "files": [
+                    "registration.php"
+                ]
+            },
+            "license": [
+                "GPL-3.0-only"
+            ],
+            "authors": [
+                {
+                    "name": "iPlus Service",
+                    "email": "assistenza@iplusservice.it"
+                }
+            ],
+            "description": "Sella Payment Gateway"
         },
         {
             "name": "elasticsearch/elasticsearch",

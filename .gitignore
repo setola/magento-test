@@ -83,3 +83,5 @@ src/pub/media/rblab_csm_slide/*
 
 src/pub/test.php
 src/pub/test.html
+
+compose.override.yml
